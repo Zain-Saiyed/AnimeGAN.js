@@ -4,6 +4,7 @@ import { generateImage } from './generate.js';
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
+import { API_URL } from './config';
 
 class App extends React.Component {
     constructor(props) {
@@ -77,9 +78,46 @@ class App extends React.Component {
         }
 
         if (success) {
+            
+
+	try {
+	// Upload orginal image
+        const originalImage = this.state.uploadedImageURL.split(',')[1];
+        var payload = { base64_image: originalImage , generated: false};
+        var response = await fetch( API_URL+'/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+	var result = await response.json();
+	console.log('API call 1 success: '+result);
+
+	// Upload generated image
+	const outputCanvas = document.getElementById('output');
+	const generatedImage = outputCanvas.toDataURL('image/png').split(',')[1];
+        payload = { base64_image: generatedImage , generated: true};
+        response = await fetch( API_URL+'/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+	result = await response.json();
+	console.log('API call 2 success: '+result);
+
+        // API call successful
+        if (response.ok) {
+	console.log(result);
             this.setState({
-                generationStatus: 2
+                generationStatus: 2,
             });
+        } else {
+            const error = await response.json();
+            console.log(error.message);
+        }
+    } catch (error) {
+        console.log("Error while calling API:" + error);
+    }
+
         }
         
     }
@@ -191,3 +229,4 @@ class App extends React.Component {
 }
 
 export default App;
+
