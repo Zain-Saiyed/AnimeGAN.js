@@ -16,7 +16,11 @@ class App extends React.Component {
             resize: "none",
             generationStatus: 0,
             updateGenerationProgressInterval: -1,
-            bytesUsed: 0
+            bytesUsed: 0,
+            rating: 0, 
+            feedback: '', 
+            feedbackSubmitted: false,
+            uuid: ''
         };
     }
 
@@ -28,7 +32,7 @@ class App extends React.Component {
             this.setState({
                 uploadedImageURL: dataURL,
                 uploaded: true
-            });
+            }); 
         };
         reader.readAsDataURL(input.files[0]);
     }
@@ -78,48 +82,97 @@ class App extends React.Component {
         }
 
         if (success) {
-            
+            try {
+            // Upload orginal image
+                const originalImage = this.state.uploadedImageURL.split(',')[1];
+                var payload = { base64_image: originalImage , generated: false};
+                var response = await fetch( API_URL+'/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+                var result = await response.json();
+                console.log('API call 1 success: '+result);
 
-	try {
-	// Upload orginal image
-        const originalImage = this.state.uploadedImageURL.split(',')[1];
-        var payload = { base64_image: originalImage , generated: false};
-        var response = await fetch( API_URL+'/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-	var result = await response.json();
-	console.log('API call 1 success: '+result);
-
-	// Upload generated image
-	const outputCanvas = document.getElementById('output');
-	const generatedImage = outputCanvas.toDataURL('image/png').split(',')[1];
-        payload = { base64_image: generatedImage , generated: true};
-        response = await fetch( API_URL+'/upload', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-	result = await response.json();
-	console.log('API call 2 success: '+result);
-
-        // API call successful
-        if (response.ok) {
-	console.log(result);
-            this.setState({
-                generationStatus: 2,
-            });
-        } else {
-            const error = await response.json();
-            console.log(error.message);
-        }
-    } catch (error) {
-        console.log("Error while calling API:" + error);
-    }
-
+                // Upload generated image
+                const outputCanvas = document.getElementById('output');
+                const generatedImage = outputCanvas.toDataURL('image/png').split(',')[1];
+                    payload = { base64_image: generatedImage , generated: true};
+                    response = await fetch( API_URL+'/upload', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                result = await response.json();
+                console.log('API call 2 success: ');
+                
+                // API call successful
+                if (response.ok) {
+                    console.log(result);
+    
+                    const key = result['key'];
+                    const uuid = key ? key.replace('-generated.jpg', '') : '';
+                
+                this.setState({ uuid: uuid });
+                    this.setState({
+                        generationStatus: 2,
+                    });
+                } else {
+                    const error = await response.json();
+                    console.log(error.message);
+                }
+            } catch (error) {
+                console.log("Error while calling API:" + error);
+            }
         }
         
+    }
+
+    onRatingChange = (event) => {
+        this.setState({
+            rating: event.target.value,
+        });
+    }
+
+    onFeedbackChange = (event) => {
+        this.setState({
+            feedback: event.target.value,
+        });
+    }
+
+    submitGeneratedImageFeedback = async () => {
+        const { rating, feedback } = this.state;
+
+        try {
+            const {uuid} = this.state;
+            const feedbackPayload = {
+                uuid: uuid,
+                rating: rating,
+                feedback: feedback,
+            };
+
+            const response = await fetch(API_URL+"/feedback", {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(feedbackPayload),
+            });
+                var result = await response.json();
+                console.log('API call feedback: '+result);
+            if (response.ok) {
+                // Feedback submitted successfully
+                this.setState({
+                    feedbackSubmitted: true,
+                    rating:0,
+                    feedback: ''
+                });
+
+            } else {
+                const errorResponse = await response.json();
+                throw new Error(errorResponse.message || 'Failed to submit feedback');
+            }
+        } catch (error) {
+            alert("Error encountered while submitting feedback: " + error);
+        }
     }
     
     componentWillUnmount = () => {
@@ -210,6 +263,25 @@ class App extends React.Component {
                             </Col>
                             <Col/>
                         </Row>
+                        
+                        <div className="feedback-section mx-auto" style={{ width: '15%', border: '1px solid #ccc', padding: '10px' }}>
+                            {this.state.feedbackSubmitted && (
+                                <div className="text-success mt-3">Feedback submitted successfully!</div>
+                            )}
+                            <div className="form-group">
+                                <label>Rating:</label>
+                                <select value={this.state.rating} onChange={this.onRatingChange} className="form-control">
+                                    {[...Array(6).keys()].map((value) => (
+                                        <option key={value} value={value}>{value}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="form-group">
+                                <label>Feedback:</label>
+                                <textarea value={this.state.feedback} onChange={this.onFeedbackChange} className="form-control" />
+                            </div>
+                            <button onClick={this.submitGeneratedImageFeedback} className="btn btn-primary">Submit Feedback</button>
+                        </div>
                         <Row className="margin">
                             <Col/>
                             <Col xs="12" md="12" lg="12" xl="10" style={{textAlign: "center", margin: "20px"}}>
